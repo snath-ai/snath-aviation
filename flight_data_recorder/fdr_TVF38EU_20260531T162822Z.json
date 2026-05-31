@@ -1,0 +1,56 @@
+{
+  "signature": "59b698be83588be81e8b394da85e153b41687a165038f846cac0bc28bbfa249a",
+  "meta": {
+    "schema_version": "1.0",
+    "fdr_compliant": true,
+    "recorded_at": "20260531T162822Z",
+    "flight_id": "TVF38EU",
+    "state_keys": [
+      "telemetry_radar",
+      "telemetry_pitot",
+      "z_radar",
+      "z_pitot",
+      "conf_radar",
+      "conf_pitot"
+    ],
+    "hmac_algorithm": "HMAC-SHA256"
+  },
+  "state": {
+    "telemetry_radar": {
+      "velocity": 221.06,
+      "altitude": 11582.4,
+      "callsign": "TVF38EU"
+    },
+    "telemetry_pitot": {
+      "velocity": 221.06,
+      "altitude": 11582.4,
+      "callsign": "TVF38EU"
+    },
+    "z_radar": {
+      "__tensor__": true,
+      "shape": [
+        3
+      ],
+      "dtype": "torch.float32",
+      "data": [
+        0.7368666529655457,
+        0.8999999761581421,
+        0.772159993648529
+      ]
+    },
+    "z_pitot": {
+      "__tensor__": true,
+      "shape": [
+        3
+      ],
+      "dtype": "torch.float32",
+      "data": [
+        0.7368666529655457,
+        0.8999999761581421,
+        0.772159993648529
+      ]
+    },
+    "conf_radar": 0.8220192790031433,
+    "conf_pitot": 0.8220192790031433
+  }
+}

@@ -1,0 +1,1 @@
+{"asof": "2026-05-31", "scenario_id": "flight_100", "decision": "TRIGGER_REPLAN", "basis": 0.9, "conf_a": 0.95, "conf_b": 0.9, "v_a": [0.05, 0.9, 0.05], "v_b": [0.05, 0.05, 0.9], "realised_outcome": "level_flight", "realised_class": "level_flight", "winner": "radar", "sig": "77808a7daa5c4f50f1510cee7f3a39b73d1d425cf0c7739c11c260f4f4990bd8"}
