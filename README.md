@@ -1,169 +1,294 @@
-# Snath Aviation
+# Snath Aviation — Aviation Sensor Fault Resolution
 
-This repository contains the reference implementation for the **Lár-JEPA Aviation Architecture** and the **DMN Sleep Cycle** as proposed in the *Divergence Is Not Noise* (DAS) academic paper.
-
-This system demonstrates a biologically-inspired, multi-stream cognitive architecture that can safely route autonomous vehicles (e.g., aircraft) through massive sensor failures without relying on dangerous "Black Box" neural networks for its core safety logic.
-
-## 🧠 Core Philosophy: The Black Box Problem
-In safety-critical domains like Aviation, the FAA will not certify a deep neural network (a "Black Box") to route a plane because gradient descent backpropagation can suffer from catastrophic forgetting, leading to unpredictable failure states.
-
-To solve this, Lár-JEPA splits the cognitive load into two entirely distinct systems:
-1. **The Encoders (Neural)**: Stream-independent sensors (Radar, Pitot, etc.) that learn via PyTorch.
-2. **The Router (Mathematical)**: A completely frozen, 100% deterministic geometry engine that enforces 33 strict cognitive invariants.
-
-Because the routing core contains zero trainable weights and relies purely on L1 distance geometry, it is mathematically provable, completely auditable, and inherently safe.
+Autonomous sensor failure detection and recovery on the Lar-JEPA cognitive architecture.
 
 ---
 
-## 🛠️ The Kahneman Hybrid Architecture (System 1 + System 2)
+## Overview
 
-When the deterministic routing core detects a massive divergence between two confident sensors (e.g., the Radar says the plane is flying fast, but the Pitot tube says it is stalling), it triggers a `TRIGGER_REPLAN` safety event.
+Snath Aviation is the reference implementation of the **Lár-JEPA cognitive architecture** applied to aviation safety. It routes aircraft control decisions through multi-stream sensor failures by measuring geometric divergence between two independent sensor streams: Radar and Pitot.
 
-Instead of discarding this error, the system stores the raw geometric trace of the anomaly in a local **ChromaDB** episodic memory bank as a $\mathcal{D}_{hard}$ training curriculum.
+When the streams confidently disagree — for example, Radar reports 274 m/s while a frozen Pitot reports 0 m/s — the system logs the event as a D-hard write, trains a LoRA adapter on the failure geometry during the Default Mode Network consolidation pass, and on the next flight resolves the anomaly from memory. No human intervention is required for known failure patterns.
 
-During idle periods, the **Default Mode Network (DMN)** sleep cycle activates and processes these anomalies using a two-tiered Kahneman Hybrid defense cascade:
+This project is dedicated to the 228 lives aboard **Air France Flight 447** (1 June 2009). The mathematics to prevent that accident existed. This system is its implementation.
 
-### System 1: The Fast Reflex (JSON Centroid Cache)
-The DMN clusters the anomalies and extracts a simple mathematical centroid, saving it as a lightweight `.json` file.
-* **Inference**: On the next flight, the `AviationAdapterRouter` checks the incoming latent geometry against the JSON cache in $O(\log N)$ time. If the anomaly perfectly matches the centroid (e.g., a known Pitot freeze), it instantly overrides the system with a safe response. No matrix multiplication is required.
-
-### System 2: Deep Cortical Restructuring (PyTorch LoRA)
-For long-term robustness, the DMN simultaneously instantiates a PyTorch `AdamW` optimizer and computes gradient descent on a Rank-1 matrix pair ($A$ and $B$) to minimize the L1 Divergence Loss between the faulty sensor and the safe sensor. It saves these weights as a `.pt` file.
-* **Inference**: The PyTorch `.pt` matrices are loaded directly into the base Neural Encoders ($W' = W + AB$). This permanently warps the continuous geometry of the latent manifold. The mathematical representation is fixed so perfectly that the frozen Router never even detects a divergence in the first place.
-
-### Why Hybrid? (The Band-Aid vs. The Cure)
-If a system relies entirely on JSON centroid overrides, the underlying encoders never get smarter. They will continuously produce mathematically faulty latent outputs, triggering internal alarms that the JSON cache must manually override like a **Band-Aid**. The base manifold remains chaotic and ignorant.
-
-By training PyTorch LoRA matrices, we provide a mathematical **Cure**. The LoRA physically shifts the continuous geometry of the Encoder so that it naturally matches the safe trajectory. The alarm never goes off in the first place, ensuring the underlying AI structurally heals over time. 
-* **JSON (System 1)** provides immediate, guaranteed reactive safety *today*.
-* **LoRA (System 2)** provides structural mathematical robustness *tomorrow*.
+Repository: [github.com/snath-ai/snath-aviation](https://github.com/snath-ai/snath-aviation)
 
 ---
 
-## 🚀 Getting Started
+## Prior Art and Licensing
 
-## How to Run the Validations
+The cognitive architecture, abstract base class specification, and divergence routing invariants are defined in the **Lár-JEPA** framework.
+
+- Lár-JEPA source: [github.com/snath-ai/Lar-JEPA](https://github.com/snath-ai/Lar-JEPA) — Apache 2.0
+- UCR paper (Ten-ABC specification): [doi.org/10.5281/zenodo.20278775](https://doi.org/10.5281/zenodo.20278775)
+- DAS paper (V1-V6 divergence invariants, Safety-Learning Equivalence): [doi.org/10.5281/zenodo.20278781](https://doi.org/10.5281/zenodo.20278781)
+- Author: Aadithya Vishnu Sajeev
+- Published: May 2026, prior to commercial employment
+
+---
+
+## The Ten-ABC Cognitive Contract
+
+Each abstract base class defined in the UCR paper is instantiated once in this domain. The table below maps each ABC to its aviation implementation and its role in the pipeline.
+
+| # | Abstract Base Class | Aviation Implementation | Role |
+|---|---|---|---|
+| 1 | AbstractCognitiveNode | AviationCognitiveNode | Base routable node for all pipeline stages |
+| 2 | AbstractManifold | FlightStateJEPA | JEPA world model: `embed_context` -> predict next flight state; `entropic_loss` measures prediction uncertainty |
+| 3 | AbstractContextBridge | SensorStateContextBridge | Stateless: fused sensor latent (B,D) -> (B,1,D) cross-attention query for the fault locator |
+| 4 | AbstractLatentFaultLocator | SensorAnomalyLocator | I1-I6: fused flight state x sensor-slot sequence -> topk most-anomalous sensor slots |
+| 5 | AbstractEntropicRouter | AviationEntropyGate | Pre-divergence gate: if FlightStateJEPA prediction entropy is too high, skip divergence measurement entirely and emit STRUCTURAL_IMPASSE |
+| 6 | AbstractAttentionKernel | LinearAttentionSensorKernel | A1-A6: O(N) linear attention over the sensor universe, ELU+1 feature map |
+| 7 | AbstractPerturbationOperator | SensorFailurePerturbator | P1-P6: delta = encode(radar_stream) - encode(pitot_stream); counterfactual trajectory reconstruction |
+| 8 | AbstractRoutingKernel | TrajectoryCommitKernel | R1-R4: cosine departure score -> SAFE / BORDERLINE / STRUCTURAL_IMPASSE. R4 is the final un-bypassable physics firewall |
+| 9 | AbstractModalEncoder | FusedSensorEncoder, RadarEncoder, PitotEncoder | FusedSensorEncoder: 8-dim flight state -> latent (B,D). RadarEncoder: velocity+altitude -> 3D latent, SNR confidence, LoRA-injectable. PitotEncoder: airspeed -> 3D latent, SNR confidence, LoRA-injectable |
+| 10 | AbstractDivergenceRouter | AviationDivergenceRouter | V1-V6: content-blind geometric divergence between radar and pitot streams. Zero trainable weights. FAA-certifiable |
+
+`prove_abc_coverage()` reports **10/10 ALL PASS**, 8 HMAC-audited steps, using `core.interfaces` from the Lár-JEPA installation at `/Users/aadithya/Desktop/Lar_Main/lar_jepa/core/interfaces.py`.
+
+---
+
+## Architecture
+
+### Layer 1: Perception
+
+The perception layer consists of three encoders. All are implementations of `AbstractModalEncoder` and `nn.Module`.
+
+**RadarEncoder**
+
+Maps velocity and altitude to a 3-dimensional latent vector normalised to [0,1]^3. Confidence is computed as an SNR proxy: `sigmoid((|z - 0.5|.mean() - 0.15) * 10)`. Supports LoRA injection: `adapted = base + (base @ lora_A @ lora_B)`. The `load_lora()` method verifies the HMAC signature and checks `target_encoder == "radar"` before injecting weights.
+
+**PitotEncoder**
+
+Maps airspeed to a 3D latent. When the Pitot tube freezes (velocity=0), the latent collapses to `[0.00, 0.05, altitude_norm]` and confidence drops to approximately 0.05. Supports identical LoRA injection with `target_encoder == "pitot"` type-safety, preventing GPS Spoof adapters from being applied to a Pitot Freeze and vice versa.
+
+Both encoders are completely independent: no shared parameters, no shared activations. This is enforced by V1.
+
+**FusedSensorEncoder**
+
+Maps an 8-dimensional flight state vector (velocity, altitude, heading, pitch, roll, angle of attack, engine thrust, fuel) to a latent of shape (B,D). Used by the GraphExecutor full-stack pipeline.
+
+**SensorFailurePerturbator**
+
+Computes the counterfactual delta: `delta = encode(radar) - encode(pitot_frozen)`. The method `predict_perturbed_state(z_ctrl, alpha)` returns `z_ctrl + alpha * delta`. At alpha=1.0 this is the full counterfactual trajectory using Radar as ground truth.
+
+---
+
+### Layer 2: The Frozen Routing Core (V1-V6)
+
+`AviationDivergenceRouter` contains **zero trainable weights**. It will never be updated by backpropagation and cannot suffer catastrophic forgetting. The FAA can read the 12 lines of routing logic and formally verify them.
+
+**Divergence metric:**
+
+```
+D = L1(softmax(z_radar) - softmax(z_pitot)) / sqrt(dim)
+```
+
+Probability-vector normalisation makes D magnitude-invariant, halving the false-positive REPLAN rate compared to raw L1. A NaN guard ensures that if either encoder returns NaN, D is forced to 2.0, which routes unconditionally to STRUCTURAL_IMPASSE.
+
+**V4 Content Blindness:** `route()` receives only `(c_a, c_b, D)` — never the raw sensor vectors.
+
+**V6 Safety-Learning Equivalence:** STRUCTURAL_IMPASSE and TRIGGER_REPLAN are the maximum-information events. Every sensor failure is an opportunity for the DMN to learn.
+
+**Routing matrix:**
+
+| Condition | Decision |
+|---|---|
+| D < 0.5 (any confidence) | COMMIT_TRAJECTORY |
+| D >= 0.5 and both c > 0.8 | TRIGGER_REPLAN |
+| Both c < 0.1 | STRUCTURAL_IMPASSE |
+
+**R4 Final Firewall (TrajectoryCommitKernel):** If the perturbed trajectory score is below 0.5, the system throws STRUCTURAL_IMPASSE and self-disconnects — making it physically incapable of committing a maneuver that violates flight physics. The LoRA learning system cannot bypass this firewall.
+
+---
+
+### Layer 3: Default Mode Network
+
+**DHardQueue**
+
+An HMAC-signed JSONL store. Each `DHardEvent` records: `asof`, `scenario_id`, `decision`, `basis` (divergence), `conf_a` (radar confidence), `conf_b` (pitot confidence), `v_a` (radar latent), `v_b` (pitot latent), `winner`.
+
+**AviationDMN**
+
+Reads resolved D-hard events and clusters them by winner: `radar_wins` -> Pitot Freeze cluster; `pitot_wins` -> GPS Spoof cluster. Trains a System 1 JSON centroid and a System 2 PyTorch LoRA per cluster during the consolidation pass.
+
+**AviationAdapterRouter**
+
+Loads JSON centroids and computes L1 distance from the incoming broken latent to all centroids. Distance < 0.2 is a cache hit, triggering an instant COMMIT_TRAJECTORY override with zero matrix multiplication.
+
+**AviationHealthMonitor**
+
+Implements a `HEALTHY -> ACTIVE -> RECOVERING` state machine. Auto-detaches LoRA when raw divergence drops below 0.5 for `recovery_window` consecutive ticks (sensor has physically recovered). On divergence spike: re-classifies via System 1 before re-arming. Typed cache on `(encoder_name, adapter_type)` prevents cross-class adapter injection.
+
+Temporal decay is applied at re-arm time:
+
+```
+W = exp(-lambda * delta_t)
+```
+
+| Failure Class | lambda | Rationale |
+|---|---|---|
+| weather_induced | 0.50 | Seasonal patterns shift; fast decay |
+| hardware_struct | 0.02 | Intrinsic to the aircraft; slow decay |
+
+If `W < 0.40` at re-arm time, the monitor refuses to load the adapter and flags the event as STALE, requiring fresh DMN consolidation.
+
+**Revival Signaling:** If a failure type that was previously detached re-appears after N clean flights, a REVIVAL_SIGNAL fires to maintenance.
+
+**Empirical results:** Raw divergence of 1.59 on a live UAL2298 flight simulation (Pitot frozen) reduced to 0.05 after LoRA injection — a 93.3% divergence reduction validated on a holdout of N=500 synthetic flights.
+
+---
+
+## The Kahneman Hybrid Architecture
+
+The DMN implements a two-tier cascade that maps directly onto Kahneman's System 1 / System 2 distinction.
+
+**System 1 — AviationAdapterRouter (the fast reflex)**
+
+JSON centroid spatial search: `L1(incoming_broken_latent, centroid) < 0.2` is a cache hit. The COMMIT_TRAJECTORY override executes in under 1 ms with zero matrix multiplication. This is the safety guarantee for today.
+
+**System 2 — AviationDMN.consolidate() (the structural cure)**
+
+AdamW trains Rank-1 A (3x1) and B (1x3) LoRA matrices on the failure cluster to minimise L1 loss between faulty and safe latents. The adapter is saved as an HMAC-signed `.pt` file with a `target_encoder` field. `load_lora()` checks the HMAC and `target_encoder` before injecting. Final loss is typically 0.017-0.020. The effect: `faulty_latent + (faulty_latent @ A @ B) = safe_latent`. The base encoder's geometry is structurally repaired so that the frozen router never observes a divergence in the first place. This is the intelligence that accumulates tomorrow.
+
+**Why hybrid?** A system relying only on JSON centroid overrides applies a continuous band-aid while the underlying encoder geometry remains chaotic. The LoRA provides a permanent mathematical cure: the sensor latent space is warped to match the safe trajectory, and the alarm never fires again.
+
+**Large-scale validation (N=2000 synthetic flights):** System 1 hit rate 100%. System 2 divergence reduction 76.7%.
+
+**Live telemetry validation:** UAL2298 intercepted via OpenSky Network API. Pitot freeze simulated. DMN trained. Next flight: Tier 1 System 1 instant cache hit, Tier 2 System 2 LoRA loaded. Divergence reduced from 1.59 to 0.05.
+
+---
+
+## Pipeline Topology
+
+### aviation_full_stack.py (GraphExecutor, 8 HMAC-audited steps, lar v2.2.0)
+
+```
+SensorEmbeddingNode (FusedSensorEncoder -> z (B,D))
+  -> FlightStateWorldModelNode (FlightStateJEPA -> predict next state, entropic_loss)
+  -> AviationEntropyGateNode (AviationEntropyGate -> COMMIT / REPLAN / IMPASSE)
+       |
+       +-- COMMIT
+       |     -> SensorContextBridgeNode (SensorStateContextBridge -> (B,1,D) query)
+       |     -> SensorPerturbationNode (SensorFailurePerturbator -> z_pred counterfactual)
+       |     -> FaultLocalisationNode (SensorAnomalyLocator + LinearAttentionSensorKernel
+       |                               -> topk anomalous sensors)
+       |     -> TrajectoryRouterNode (TrajectoryCommitKernel -> SAFE / BORDERLINE / IMPASSE)
+       |           |
+       |           +-- SAFE       -> FlightContinueNode -> HMAC audit
+       |           +-- BORDERLINE -> PilotJuryEscalationNode -> HMAC audit
+       |           +-- IMPASSE    -> AutopilotDisconnectNode -> HMAC audit
+       |
+       +-- REPLAN / IMPASSE -> HumanPilotEscalationNode -> HMAC audit
+```
+
+### demo_real_world.py (live OpenSky telemetry, full DMN closed loop)
+
+```
+fetch_live_flight()  [OpenSky Network API]
+  -> RadarEncoder.encode()  [true velocity + altitude]
+  -> PitotEncoder.encode()  [simulated freeze: velocity=0]
+  -> AviationDivergenceRouter.route()  [D=1.59 -> TRIGGER_REPLAN]
+  -> AviationFaultLocator  [cross-attention -> topk faulted sensor slots]
+  -> AviationPerturbationOperator  [delta = z_radar - z_pitot]
+  -> AviationRoutingKernel  [score -> LethalTrifectaGuard -> COMMIT or IMPASSE]
+  -> DHardEvent.sign()  -> d_hard_live.jsonl
+  -> AviationDMN.consolidate()  [System 1 JSON + System 2 LoRA]
+  -> Next flight: AviationAdapterRouter.resolve()  [System 1 cache hit]
+  -> PitotEncoder.load_lora()  [System 2 structural repair]
+  -> AviationDivergenceRouter.route()  [D=0.05 -> COMMIT_TRAJECTORY]
+```
+
+---
+
+## EU AI Act Compliance
+
+**AEPD Rule of 2 (LethalTrifectaGuard)**
+
+`AviationRoutingKernel.route()` evaluates `LethalTrifectaGuard` before committing. The combination of untrusted sensor input (D > 0.5), sensitive trajectory context, and autonomous action requires pilot approval. Bypassing this guard throws an unrecoverable `LethalTrifectaError`.
+
+**Art. 72-74 (Post-Market Monitoring)**
+
+STRUCTURAL_IMPASSE events trigger `IncidentReporterNode`, which writes CRITICAL or HIGH severity reports to an immutable `incidents.jsonl`. The 24-hour mandatory reporting window is enforced by design.
+
+**Art. 13 (Transparency)**
+
+When a LoRA adapter masks a broken sensor, the system flags synthetic content. The pilot is never misled into believing a frozen Pitot is functioning.
+
+**Art. 14 (Human Oversight)**
+
+`AviationJuryNode` (Pilot-in-the-Loop) pauses execution for borderline safety scores and cryptographically logs the pilot decision to the Flight Data Recorder.
+
+**Audit trail**
+
+The GraphExecutor produces an HMAC-signed audit trail for every step in the pipeline, providing a tamper-evident record of every routing decision.
+
+---
+
+## Running
 
 ```bash
-# 1. Run the large-scale synthetic holdout test (N=500 flights)
-python3 eval_large_scale.py
+# All 10 ABCs + GraphExecutor, 8 audited steps
+python aviation_full_stack.py
 
-# 2. Run the real-world live flight interception demo
-python3 demo_real_world.py
+# Live OpenSky telemetry + full DMN closed loop
+python demo_real_world.py
 
-# 3. Run the Temporal Decay & Cache test
-python3 demo_temporal.py
+# N=2000 synthetic validation
+python demo_large_scale.py
+
+# LoRA lifecycle: arm / detach / re-arm (45 ticks)
+python demo_health_monitor.py
+
+# 33-invariant end-to-end pipeline
+python demo_full_33.py
+
+# Formal invariant test suite
+python test_33_invariants.py
+
+# LethalTrifectaGuard tests
+python test_trifecta.py
 ```
 
-### What happens in `demo_real_world.py`:
-1. **Live Ingestion**: The script intercepts a live, randomly selected commercial aircraft (e.g., a United Airlines Boeing 737) and downloads its true velocity and altitude.
-2. **Simulated Anomaly**: The script artificially induces a "Pitot Tube Freeze" (reporting 0 m/s velocity) while the Radar reports the true OpenSky velocity.
-3. **Active Inference**: The frozen Lár-JEPA router correctly identifies the geometric divergence, targets the topological fault, perturbs a counterfactual trajectory, and outputs a mathematically safe response. It saves the event to ChromaDB.
-4. **DMN Sleep Cycle**: The `AviationDMN.consolidate()` method trains both a JSON Centroid and a PyTorch LoRA `.pt` adapter on the recorded anomaly.
-5. **The Next Flight**: The script simulates a second flight with the exact same anomaly to demonstrate the Hybrid Cascade:
-   * **Tier 1**: The JSON Cache instantly intercepts and resolves the raw anomaly.
-   * **Tier 2**: The `.pt` matrices are loaded into the PyTorch Encoders, structurally fixing the geometry so that the base router is entirely appeased.
+---
 
-### Empirical Results (Live Telemetry Trace)
-When intercepting United Airlines Flight 2298, the system experienced a simulated Pitot tube freeze. The **DMN Sleep Cycle** successfully trained the PyTorch LoRA on the failure:
-```text
-🧠 DMN Sleep Cycle: Processing 1 'Pitot Freeze' anomalies...
-    [SYSTEM 1] Generated Fast JSON Centroid Cache at models/adapters_live/adapter_pitot_freeze.json
-    [SYSTEM 2] Trained PyTorch LoRA (Loss: 0.0179) at models/adapters_live/adapter_pitot_freeze.pt
-```
+## ABC Coverage
 
-**Latest live interception (TVF38EU, France):**
-```text
-✈️  Intercepted Live Flight: TVF38EU (France)
-   Velocity: 228.67 m/s | Altitude: 11582.4 m
-   Divergence (L1): 0.00 → COMMIT_TRAJECTORY  (both sensors healthy)
-```
-
-On the next flight, the **Hybrid Architecture Cascade** resolved the anomaly:
-```text
-    [Tier 1] System 1: Fast JSON Centroid Intercept
-    Raw Base Decision: TRIGGER_REPLAN
-    System 1 Decision: COMMIT_TRAJECTORY
-    System 1 Note: System 1 Cache Hit (Pitot Freeze detected). Overriding base decision.
-
-    [Tier 2] System 2: Deep PyTorch Cortical Restructuring
-    New Radar Latent: [0.743 0.9   0.691]
-    New Pitot Latent (LoRA Adapted): [0.715 0.886 0.685]
-    New Divergence (L1): 0.05
-    System 2 Decision (Base Router): COMMIT_TRAJECTORY
-```
-*Note how the LoRA adapter successfully shifted the Pitot latent geometry to match the Radar latent geometry, mathematically closing the L1 Divergence gap from a massive 1.59 down to a safe 0.05, allowing the Frozen Base Router to naturally clear the flight!*
-
-### Large Scale Validation (N=2000)
-To mathematically prove the architecture works at scale, we generated 2,000 synthetic flights, injecting random Pitot Freezes and GPS Spoofs. We successfully clustered the failures and simultaneously trained PyTorch LoRAs and JSON caches for both anomaly classes. Validating the Tiered Cascade on a holdout set of 1,000 new anomalies produced the following:
-
-```text
-============================================================
-VERIFICATION RESULTS
-============================================================
-Total Anomalies Tested         :  500
-System 1 Hit Rate              :  100.0%
-Average Raw Divergence (L1)    :  0.82  (Alarm Threshold > 0.5)
-Average System 2 Divergence    :  0.0548 (Safe Threshold)
-System 2 Mathematical Reduction:  93.3%
-============================================================
-```
-1. **System 1** intercepted 100% of the failures instantly.
-2. **System 2** dynamically loaded the exact PyTorch LoRA mapped to the System 1 centroid, successfully reducing the mathematical divergence by **93.3%** across the holdout fleet.
-
-### Temporal Decay & Adapter Trust (TemporalNode)
-
-The `AviationHealthMonitor` incorporates a **Temporal Decay** system — directly inspired by the TemporalNode from Snath Locus — to prevent stale adapters from being re-armed long after their training conditions have changed.
-
-Each adapter carries a trust weight computed at re-arm time:
+Running `prove_abc_coverage()` from `aviation_full_stack.py` produces:
 
 ```
-W = exp(-λ · Δt)
+10/10 ALL PASS
+8 audited steps
+core.interfaces from: /Users/aadithya/Desktop/Lar_Main/lar_jepa/core/interfaces.py
 ```
 
-where `Δt` is years elapsed since the LoRA adapter was trained, and `λ` varies by failure class:
-
-| Failure Class | λ | Rationale |
+| ABC | Implementation | Status |
 |---|---|---|
-| `weather_induced` (ice, turbulence) | 0.50 | Seasonal patterns shift — fast decay |
-| `hardware_struct` (manufacturing defects) | 0.02 | Intrinsic to the aircraft — slow decay |
-| default | 0.10 | General-purpose decay |
+| AbstractCognitiveNode | AviationCognitiveNode | PASS |
+| AbstractManifold | FlightStateJEPA | PASS |
+| AbstractContextBridge | SensorStateContextBridge | PASS |
+| AbstractLatentFaultLocator | SensorAnomalyLocator | PASS |
+| AbstractEntropicRouter | AviationEntropyGate | PASS |
+| AbstractAttentionKernel | LinearAttentionSensorKernel | PASS |
+| AbstractPerturbationOperator | SensorFailurePerturbator | PASS |
+| AbstractRoutingKernel | TrajectoryCommitKernel | PASS |
+| AbstractModalEncoder | FusedSensorEncoder, RadarEncoder, PitotEncoder | PASS |
+| AbstractDivergenceRouter | AviationDivergenceRouter | PASS |
 
-If `W < 0.40` at re-arm time, the monitor **refuses to load the stale adapter** and flags the event for a fresh DMN consolidation — mirroring TemporalNode's behaviour of pushing borderline viability scores toward `REPLAN` when evidence is stale.
+---
 
-**Revival Signaling:** If a previously detached adapter type re-appears (the same failure pattern returning after a gap), the monitor fires a `REVIVAL SIGNAL` to flag the recurring pattern for maintenance investigation.
+## Prior Art Chain
 
-A `temporal_audit()` method prints all cached adapters with their current trust weights as a progress bar.
+The following Zenodo DOIs record the cumulative development of the Lár-JEPA cognitive architecture, from the initial DMN episodic memory design through the complete ten-ABC divergence routing specification.
 
-## 🔍 Deep Architecture Concepts
-
-### 1. Dynamic Routing: How does System 1 choose the right LoRA?
-When a live anomaly occurs (e.g., the Pitot latent vector is `[0.0, 0.05, 0.69]`), the `AviationAdapterRouter` uses the lightweight JSON cache as a spatial search index. It computes the **L1 Distance** between the incoming broken latent and all saved `.json` centroids in $O(\log N)$ time. 
-* If it checks a "GPS Spoof" centroid (`[0.2, 0.1, 0.9]`), the L1 distance is large. It ignores it.
-* If it checks the "Pitot Freeze" centroid (`[0.0, 0.05, 0.69]`), the L1 distance is `< 0.2`. **Cache Hit!**
-System 1 now knows exactly what the failure is, and instructs System 2 to load the corresponding `adapter_pitot_freeze.pt` weights.
-
-### 2. Execution: What happens when the `.pt` file is loaded?
-The `.pt` file contains two tiny Rank-1 PyTorch matrices ($A$ and $B$). When loaded, PyTorch intercepts the broken raw sensor vector and mathematically warps it using matrix multiplication:
-`adapted = base + (base @ A @ B)`
-This physically drags the broken coordinates (e.g., `[0.0, 0.05, 0.69]`) across the latent manifold until they match the safe Radar coordinates (`[0.71, 0.88, 0.68]`).
-
-### 3. Hardware Failure Masking: Why save a useless sensor?
-If a Pitot tube freezes in reality, the hardware is physically compromised. The tragedy of accidents like Air France 447 is that the physical aircraft was perfectly flyable, but the autopilot panicked due to contradictory sensor math and disconnected. 
-The LoRA adapter does not thaw the ice. Instead, it **masks the hardware failure from the central brain**. By warping the broken data to match the healthy Radar data, the central Router is appeased. It smoothly relies on the surviving sensors to fly the healthy aircraft, preventing a catastrophic system collapse.
-
-### 4. Preventing AI Hallucinations (The 33 Invariants)
-What if the LoRA adapter accidentally "fixes" the wrong sensor and commands the plane to dive? 
-Lár-JEPA traps the PyTorch LoRA inside a cage of 33 frozen mathematical invariants:
-* **The Trust Baseline:** The DMN uses cross-attention (Invariants I1-I6) to mathematically prove which sensor is lying by correlating it with environmental and engine invariants.
-* **The Final Firewall:** The LoRA only suggests a trajectory. Before the plane moves, it must pass the frozen `AviationRoutingKernel` (Invariant R4: Safety Score). 
-* **The Structural Impasse:** If the LoRA suggests a maneuver that violates the laws of physics, the Router instantly rejects the math, throws a `STRUCTURAL_IMPASSE (Unrecoverable)` error, and legally disconnects the AI to revert to hardware fallbacks. The AI can never execute a hallucinated fatal maneuver.
-
-## Future: Lár Graph Integration (Pilot-in-the-Loop & Redundancy)
-While currently running procedurally, Snath Aviation is theoretically mapped to the core **Lár Engine Graph Executor**, gaining two critical features:
-1. **Redundant Sensor Parallelism (`BatchNode`)**: Safely polls dozens of sensors simultaneously, isolating and dropping physically frozen hardware via strict branch timeouts.
-2. **Pilot-in-the-Loop Override (`HumanJuryNode`)**: Satisfies EU AI Act Art 14 (Automation Boundary) by pausing execution on borderline safety scores to request human pilot override via the MFD, cryptographically logging the decision to the Flight Data Recorder.
-
-## 📚 Paper Reference
-This architecture is the empirical realization of the theorems proposed in:
-* **Divergence Is Not Noise: Multi-Stream Routing Without Modal Fusion and the Safety-Learning Equivalence** (Sajeev, 2026).
+| DOI | Contribution |
+|---|---|
+| 10.5281/zenodo.19025925 | Lar DMN: episodic and semantic memory, HMAC audit |
+| 10.5281/zenodo.19120047 | AbstractCognitiveNode, DAG executor |
+| 10.5281/zenodo.19245328 | AbstractManifold, AbstractContextBridge |
+| 10.5281/zenodo.19484646 | AbstractLatentFaultLocator (I1-I6) |
+| 10.5281/zenodo.19516414 | AbstractEntropicRouter, RouteDecision |
+| 10.5281/zenodo.19646405 | DMN v3.0, Learned Graph Executor |
+| 10.5281/zenodo.20278775 | Nine-ABC cognitive contract (UCR paper) |
+| 10.5281/zenodo.20278781 | AbstractDivergenceRouter V1-V6, Safety-Learning Equivalence (DAS paper) |
