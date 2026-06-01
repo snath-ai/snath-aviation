@@ -1,18 +1,17 @@
 """
 Snath Aviation — Full-Stack Demonstration of ALL TEN Lár-JEPA ABCs
 ===================================================================
-The aviation analog of public examples/powergrid_full_stack.py and
-Snath Basis finance_full_stack.py. Canonical proof that every abstract
-interface in the PUBLIC, genesis-anchored core/interfaces.py is:
+The aviation instantiation of the Lár-JEPA ten-ABC cognitive contract.
+Canonical proof that every abstract interface in core/interfaces.py
+(github.com/snath-ai/Lar-JEPA) is:
 
   1. instantiable      — a concrete aviation subclass exists for all ten ABCs,
   2. domain-agnostic   — none of the contracts requires a specific domain,
   3. composable        — they wire into one deterministic pipeline unchanged.
 
-Every contract is imported from the PUBLIC repo, making Snath Aviation
-a clean Derivative Work that proves Lár-JEPA works in aviation safety —
-the transport-domain counterpart to Snath Locus (genomics) and Snath Basis
-(quantitative finance).
+This is the aviation-safety proof of domain isomorphism — the same routing
+spine that governs CRISPR drug screening (Snath Locus) and quantitative
+finance (Snath Basis) governs sensor fault resolution without modification.
 
 THE TEN ABCs (aviation instantiations)
 ---------------------------------------
@@ -68,7 +67,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-import _lar  # noqa: F401  — resolves public Lar_Main/lar_jepa
+import _lar  # noqa: F401  — bootstraps Lár-JEPA engine path
 from lar import GraphState, GraphExecutor, BaseNode, AuditLogger
 from core.interfaces import (
     AbstractCognitiveNode,        # 1
@@ -497,7 +496,7 @@ def _initial_state() -> dict:
 def prove_abc_coverage(executor_steps: int = 0) -> int:
     """
     Machine-verifiable: all 10 ABCs subclassed in the aviation domain, every
-    contract from the PUBLIC genesis-anchored repo.
+    contract from the Lár-JEPA public repo (github.com/snath-ai/Lar-JEPA).
 
     Mirrors prove_abc_coverage() in Snath Locus and Snath Basis — this is the
     three-domain isomorphism proof:

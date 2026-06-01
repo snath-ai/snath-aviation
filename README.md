@@ -1,102 +1,244 @@
 # Snath Aviation
 
-Sensor fault resolution for aviation safety systems.
+**Cognitive sensor-fault architecture for safety-critical flight systems.**
+
+*Dedicated to the 228 aboard Air France Flight 447, 1 June 2009 — lost because the mathematics existed but had not been built.*
 
 ---
 
-Snath Aviation routes aircraft control decisions through sensor failures by measuring the geometric distance between two independent sensor streams — Radar and Pitot — rather than combining them. When the streams agree, the aircraft flies normally. When they confidently disagree, the system identifies the faulty sensor, reconstructs the safe trajectory from the healthy one, and resolves the same failure type from memory on subsequent encounters.
+On 1 June 2009, all three Pitot tubes on AF447 froze simultaneously. They reported 0 m/s. The radar and GPS reported 274 m/s. The autopilot fused all sensor data into a single incoherent state, disconnected, and handed three woken pilots a dark dashboard in a storm over the Atlantic. The aircraft stalled. It fell 38,000 feet in 4 minutes and 24 seconds.
 
-The routing core contains no trainable weights. It operates on the geometric distance between the two streams and cannot be retrained, fine-tuned, or caused to forget. The learning system operates entirely on the peripheral encoders, improving their geometry overnight without touching the routing core. The two systems — frozen router and adaptive encoders — are structurally decoupled.
+The autopilot was not defective. The pilots were not negligent. **The cognitive architecture was wrong.** It had no mathematical framework for determining which sensors to trust when they contradicted each other. It treated the contradiction as incoherence to be discarded rather than signal to be preserved.
 
-Built on [Lár](https://github.com/snath-ai/Lar-JEPA).
+Snath Aviation preserves the contradiction. It identifies which sensor failed geometrically in under one millisecond and resolves it from memory without sounding an alarm. The routing core contains zero trainable weights and can be formally verified by a regulator. All learning is confined to peripheral encoders, separated from the routing logic by 33 named invariants.
 
-*Dedicated to the 228 aboard Air France Flight 447, 1 June 2009.*
-
----
-
-## How it works
-
-### The routing core
-
-The `AviationDivergenceRouter` is mathematically frozen. Its routing logic is 12 lines. It has no trainable weights and cannot be retrained. An aviation authority can read the routing invariants and formally verify them.
-
-The divergence metric is total variation distance between the probability vectors of the two streams:
-
-```
-D = L1(softmax(z_radar) - softmax(z_pitot)) / sqrt(dim)
-```
-
-Normalising by probability vectors makes D magnitude-invariant — a frozen Pitot tube and a healthy Radar produce a large D regardless of velocity or altitude. A NaN guard forces `D = 2.0` if either encoder fails, routing unconditionally to STRUCTURAL_IMPASSE.
-
-The router receives three scalars: radar confidence, pitot confidence, divergence. It never sees the raw sensor vectors. Four outcomes:
-
-- D below threshold: fly normally
-- Both confident, D above threshold: sensor disagreement detected — log, learn, resolve from memory
-- Both confidence below floor: total signal loss — AI disconnects, revert to manual
-- R4 firewall (TrajectoryCommitKernel): if the perturbed trajectory scores below 0.5, the AI disconnects regardless of upstream outcome. The learning system cannot command a maneuver that violates flight physics.
-
-### The encoders
-
-**RadarEncoder** maps velocity and altitude to a 3-dimensional latent vector. Confidence is an SNR proxy: `sigmoid((|z - 0.5|.mean() - 0.15) * 10)`. When the Radar is healthy, confidence is approximately 0.98.
-
-**PitotEncoder** maps airspeed to the same 3D space. When the Pitot tube freezes, the latent collapses and confidence drops to approximately 0.05. This collapse is the geometric signal the router detects.
-
-Both encoders support LoRA injection. A signed rank-1 matrix pair (A, B) can be loaded into either encoder: `adapted = base + (base @ lora_A @ lora_B)`. The `load_lora()` method verifies the HMAC signature and checks the `target_encoder` field before injecting — a GPS Spoof LoRA is silently rejected by the Pitot encoder.
-
-### Default Mode Network
-
-When the router returns `TRIGGER_REPLAN`, the event is HMAC-signed and appended to a local JSONL queue. During the consolidation cycle, `AviationDMN.consolidate()` clusters events by winner (radar wins, pitot wins) and trains two artifacts per cluster:
-
-**System 1 — JSON centroid cache.** L1 distance from the incoming broken latent to the centroid. Distance below 0.2 is a match: instant `COMMIT_TRAJECTORY` override with no matrix computation. Sub-millisecond response.
-
-**System 2 — PyTorch LoRA.** Signed rank-1 matrices trained to minimise L1 loss between the faulty stream and the winning stream. Injecting the adapter into the faulty encoder warps its latent geometry to match the healthy stream. The router measures a divergence near zero. The failure is resolved at the source.
-
-**AviationHealthMonitor** manages the adapter lifecycle across continuous telemetry. It auto-detaches LoRA when raw divergence drops below the safe threshold for a sustained window (the sensor has physically recovered), re-classifies any new spike through System 1 before re-arming, and applies temporal decay — `W = exp(-lambda * delta_t)` — at re-arm time. Adapters trained on weather-induced failures (lambda = 0.50) decay faster than hardware defects (lambda = 0.02). If the adapter's trust weight falls below 0.40, the monitor refuses to re-arm and flags the event for a fresh training cycle.
-
-**Empirical results.** Live telemetry from UAL2298 (OpenSky Network): simulated Pitot freeze, raw divergence 1.59. After DMN sleep cycle and LoRA injection: divergence 0.05. Large-scale synthetic validation (N = 2000 flights, N = 500 holdout): System 1 hit rate 100%, System 2 divergence reduction 93.3%.
+Built on [Lár-JEPA](https://github.com/snath-ai/Lar-JEPA) · Apache 2.0
 
 ---
 
-## Pipeline
+## Architecture
 
 ```
-[Radar] [Pitot]     independent encoders, no shared state
-    |       |
-    v       v
-AviationDivergenceRouter  (frozen, zero weights)
-    |
-    +-- COMMIT_TRAJECTORY  --> fly normally
-    +-- TRIGGER_REPLAN     --> AviationAdapterRouter (System 1 cache lookup)
-    |                              +-- cache hit  --> override, load LoRA (System 2)
-    |                              +-- cache miss --> log to D_hard, flag for DMN
-    +-- STRUCTURAL_IMPASSE --> autopilot disconnect
+┌─────────────────────────────────────────────────────────────────────────┐
+│  LAYER 1 — PERCEPTION                                                   │
+│  RadarEncoder ──────────────────────────────── PitotEncoder             │
+│  (velocity, altitude → z_radar ∈ ℝ³)           (airspeed → z_pitot ∈ ℝ³) │
+│  Invariants M1–M3: independent, no shared state                         │
+└──────────────────────┬──────────────────────────┬───────────────────────┘
+                       │                          │
+                       ▼                          ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│  LAYER 2 — ROUTING (zero trainable weights — mathematically frozen)     │
+│                                                                         │
+│  D = L1(softmax(z_radar) − softmax(z_pitot)) / √dim                    │
+│                                                                         │
+│  both confident, D < 0.5  → COMMIT_TRAJECTORY  (fly normally)          │
+│  both confident, D ≥ 0.5  → TRIGGER_REPLAN     (sensor conflict)       │
+│  either confidence < 0.1  → STRUCTURAL_IMPASSE (total signal loss)      │
+│  trajectory score < 0.5   → STRUCTURAL_IMPASSE (R4 physics firewall)   │
+│                                                                         │
+│  Invariants V1–V6, I1–I6, A1–A6, P1–P6, R1–R4                         │
+└───────────────────────────────┬─────────────────────────────────────────┘
+                                │ TRIGGER_REPLAN
+                                ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│  LAYER 3 — LEARNING                                                     │
+│                                                                         │
+│  System 1 (< 1 ms)                  System 2 (async, overnight)        │
+│  JSON centroid cache lookup         PyTorch LoRA injection              │
+│  "have I seen this geometry?"       "structurally heal the encoder"     │
+│  trust-invariant identification     perishable correction               │
+│                                     W = exp(−λ · Δt), λ ∈ {0.50, 0.02} │
+│                                                                         │
+│  AviationDMN  ·  AviationAdapterRouter  ·  AviationHealthMonitor       │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-`aviation_full_stack.py` runs all ten ABCs on `lar.GraphExecutor` with HMAC-signed audit logging. `demo_real_world.py` runs the full closed loop on live OpenSky telemetry: failure detection, D_hard logging, DMN training, and next-flight resolution in a single execution.
+---
+
+## The routing core
+
+`AviationDivergenceRouter` is frozen permanently. It has no parameters, does not update from experience, and cannot be retrained. Its entire logic is a probability-vector divergence and four routing rules. A regulator can read the invariants, formally verify them, and certify them — something no dense neural network with millions of learned weights has ever achieved in commercial aviation.
+
+**The divergence metric:**
+
+```python
+p_radar = softmax(z_radar)
+p_pitot = softmax(z_pitot)
+D = float(np.sum(np.abs(p_radar - p_pitot)) / np.sqrt(dim))
+```
+
+Total variation distance normalised by `√dim`. Using probability vectors rather than raw activations makes the metric magnitude-invariant: a frozen Pitot at 0 m/s and a healthy Radar at 274 m/s produce the same large divergence regardless of velocity or altitude. A NaN guard forces `D = 2.0` if either encoder fails, routing unconditionally to `STRUCTURAL_IMPASSE`.
+
+**The router receives three scalars — `c_radar`, `c_pitot`, `D` — and never sees the underlying vectors.** This is Invariant V4 (Content Blindness): the routing function cannot overfit to any sensor-specific content and works identically across pitot freezes, GPS spoofs, and failure modes not yet encountered.
+
+**The 33 invariants:**
+
+| Stage | Invariants | Role |
+|---|---|---|
+| Perception | M1–M3 | Independent stream encoding; no shared state |
+| Routing | V1–V6 | Frozen geometric divergence; content blindness |
+| Fault location | I1–I6 | Cross-attention fault targeting on the graph skeleton |
+| Counterfactual | A1–A6, P1–P6 | Safe trajectory reconstruction from the trusted stream |
+| Execution | R1–R4 | Physics-gated trajectory commit; R4 is the final firewall |
+
+`test_33_invariants.py` verifies all 33 formally on every commit.
+
+---
+
+## The encoders
+
+**`RadarEncoder`** maps velocity and altitude into a 3-dimensional latent probability vector over manoeuvre classes. Confidence is an SNR proxy: `sigmoid((|z − 0.5|.mean() − 0.15) × 10)`. A healthy Radar returns confidence ≈ 0.98.
+
+**`PitotEncoder`** maps airspeed into the same 3D latent space. When the Pitot tube freezes, the latent collapses toward `[0.00, 0.05, 0.69]` and confidence drops to ≈ 0.05. This collapse is the geometric signal the router detects — not a threshold alarm, but a structural divergence between two independent views of the same physical aircraft.
+
+Both encoders implement `load_lora(pt_path)`. A signed rank-1 matrix pair `(A, B)` can be injected: `adapted = base + (base @ lora_A @ lora_B)`. Before injecting, the adapter's HMAC signature and `target_encoder` field are verified — a GPS Spoof LoRA addressed to the Radar encoder is silently rejected by the Pitot encoder. This is LoRA Sovereignty: the mathematical identity of every adapter is cryptographically enforced.
+
+---
+
+## The D_hard curriculum
+
+Every `TRIGGER_REPLAN` event is HMAC-signed and appended to `d_hard.jsonl` with its full provenance: raw latent vectors, confidence scalars, divergence scalar, and the eventual outcome (which stream was right). This queue is the aircraft's long-term episodic memory.
+
+During the DMN consolidation cycle (`AviationDMN.consolidate()`), events are clustered by their geometric pattern of failure. For each cluster, two artefacts are trained:
+
+**System 1 — JSON centroid cache.** The centroid of the broken stream's latent vectors during this failure type. At inference, `AviationAdapterRouter` computes the L1 distance from the incoming broken latent to all cached centroids. A match (distance < 0.2) overrides `TRIGGER_REPLAN` with `COMMIT_TRAJECTORY` in under one millisecond, with no matrix multiplication.
+
+**System 2 — PyTorch LoRA.** Rank-1 matrices `(A, B)` trained by AdamW to minimise `||faulty_latent + (faulty_latent @ A @ B) − target_latent||₁`. Injecting the adapter into the faulty encoder warps its geometry to match the trusted stream. The router measures a divergence near zero on the next encounter — the failure resolves before the alarm fires.
+
+This is Safety-Learning Equivalence (Invariant V6): the same event that constitutes a safety flag (`TRIGGER_REPLAN`) is the event that constitutes a training example for the adapter that prevents the same mistake. The safety invariants and the curriculum construction invariants are identical.
+
+---
+
+## System 1 + System 2
+
+The architecture is explicitly modelled on Kahneman's dual-process theory. The naming is mathematically precise.
+
+**System 1 (identification, trust-invariant):** The JSON centroid cache. It fires regardless of how old the paired LoRA adapter is. The geometric fingerprint of a Pitot freeze failure — the spatial pattern of `[0.00, 0.05, 0.69]` in latent space — does not expire. A centroid trained on a 2022 winter storm still correctly identifies a 2025 pitot freeze as the same failure class. Identification is durable.
+
+**System 2 (correction, perishable):** The LoRA adapter. It encodes a correction derived from a specific aircraft generation, altitude envelope, and atmospheric condition. A delta trained on one sensor variant may be wrong in sign for a successor variant three years later. System 2 is therefore gated by the temporal trust score before injection.
+
+**These two trust profiles are architecturally separated.** System 1 fires unconditionally on a centroid match. System 2 checks trust independently and falls back to System 1-only operation if the adapter is stale — the system still names the failure correctly and routes safely, it simply does not apply an untrusted correction.
+
+---
+
+## Temporal decay gate
+
+Adapters accumulate as the fleet learns. Not all accumulated knowledge remains trustworthy.
+
+```
+W = exp(−λ · Δt)
+
+where Δt = years since the adapter was trained
+      λ  = failure-class decay constant
+```
+
+| Failure class | λ | Trust half-life |
+|---|---|---|
+| `weather_induced` (ice, turbulence) | 0.50 | 1.4 years |
+| `hardware_struct` (manufacturing defect) | 0.02 | 34.7 years |
+
+Adapters with `W < 0.40` are refused before injection. The temporal trust score and the refusal decision are recorded in the HMAC-signed audit trail on every inference call.
+
+**Why the two classes decay at different rates:** A pitot freeze pattern is driven by atmospheric physics — icing conditions vary by season, route, and climate. A hardware structural defect (bent sensor bracket, faulty wiring) is driven by manufacturing — the physical failure mode does not change with the weather. The system knows the difference and trusts accordingly.
+
+`AviationHealthMonitor` manages the full adapter lifecycle: auto-detaching LoRA when raw divergence drops below the safe threshold (sensor recovered), re-classifying any new spike through System 1 before re-arming, and applying the trust check at re-arm time. If the adapter trust falls below 0.40 at re-arm, the monitor refuses to load it and flags the event for a fresh DMN consolidation cycle.
+
+---
+
+## Human oversight
+
+`LethalTrifectaGuard` is an unbypassable architectural block. The system cannot simultaneously hold (1) a divergent sensor reading, (2) a synthetic trajectory reconstruction, and (3) autonomous execution authority. If all three conditions are met simultaneously, the guard intercepts execution and throws `STRUCTURAL_IMPASSE` regardless of confidence scores.
+
+`AviationJuryNode` implements EU AI Act Art. 14 meaningful human oversight. When the routing kernel proposes a counterfactual trajectory but confidence is borderline, the AI halts and presents the pilot with a structured approval prompt on the Multi-Function Display. The pilot's decision and rationale are cryptographically signed into the Flight Data Recorder's audit ledger.
+
+`IncidentReporterNode` captures every `CRITICAL` or `HIGH` severity event — threshold violations, impasses, sensor losses — and logs them to an immutable JSONL audit file within the 24-hour mandatory reporting window required by EU AI Act Art. 72–74.
+
+---
+
+## Empirical results
+
+**Single flight (ADS-B demo — UAL2298, OpenSky Network):**
+
+| Stage | Divergence | Decision |
+|---|---|---|
+| Raw (Pitot frozen) | 1.59 | TRIGGER_REPLAN |
+| After DMN cycle + LoRA | 0.05 | COMMIT_TRAJECTORY |
+
+**Large-scale synthetic validation (N = 2,000 flights, N = 1,000 anomaly holdout):**
+
+| Metric | Result |
+|---|---|
+| System 1 hit rate | 100% |
+| Average raw divergence (alarm threshold > 0.5) | 0.93 |
+| Average System 2 divergence (post-correction) | 0.22 |
+| System 2 divergence reduction | 76.7% |
+
+**LoRA lifecycle (45-tick continuous telemetry simulation):**
+
+```
+Ticks  1– 5:  Clean cruise.  D = 0.00.  No LoRA.
+Tick   6:     Pitot freezes. System 1 hit in < 1ms. LoRA loaded.
+Ticks  7–20:  Frozen.        D = 1.67.  LoRA active, correcting.
+Tick  25:     🟢 LoRA detached automatically. Ice cleared.
+Tick  26:     🧊 Ice returns. System 1 re-classifies → pitot_freeze.
+              LoRA re-armed safely from typed cache.
+Tick  40:     🟢 LoRA detached again. Clean flight.
+```
 
 ---
 
 ## Getting started
 
 ```bash
-python aviation_full_stack.py    # all ten ABCs, GraphExecutor, 8 audited steps
-python demo_real_world.py        # live OpenSky telemetry + full DMN closed loop
-python demo_large_scale.py       # N=2000 synthetic validation
-python demo_health_monitor.py    # LoRA lifecycle: arm / detach / re-arm
-python demo_full_33.py           # 33-invariant pipeline
-python test_33_invariants.py     # formal invariant test suite
+# Full pipeline — all ten ABCs, GraphExecutor, HMAC audit trail
+python aviation_full_stack.py
+
+# Live ADS-B demo — OpenSky telemetry, full DMN closed loop
+python demo_real_world.py
+
+# Large-scale synthetic validation — N = 2,000 flights
+python demo_large_scale.py
+
+# LoRA lifecycle — arm / monitor / detach / re-arm
+python demo_health_monitor.py
+
+# Full 33-invariant pipeline
+python demo_full_33.py
+
+# Formal invariant test suite
+python test_33_invariants.py
+
+# Temporal decay regression tests (7 tests)
+python test_temporal_decay.py
 ```
+
+No dependencies beyond `torch`, `numpy`, and the Lár engine. `_lar.py` bootstraps the engine path automatically.
 
 ---
 
 ## Research
 
-The routing invariants, the Safety-Learning Equivalence theorem, and the proof of domain isomorphism are in:
+The routing invariants, the Safety-Learning Equivalence theorem, and the empirical proof of domain universality are formally established in:
 
 - Sajeev, A.V. (2026). *Divergence Is Not Noise: Multi-Stream Routing Without Modal Fusion and the Safety-Learning Equivalence.* [doi.org/10.5281/zenodo.20278781](https://doi.org/10.5281/zenodo.20278781)
 - Sajeev, A.V. (2026). *Universal Cognitive Routing: A Ten-Abstract-Base-Class Specification for Domain-Agnostic Agent Execution.* [doi.org/10.5281/zenodo.20278775](https://doi.org/10.5281/zenodo.20278775)
 - Sajeev, A.V. (2026). *Architecture Is All You Need: Pre-Registration and Protocol for Empirical Validation of the Lár Training Loop.* [doi.org/10.5281/zenodo.20419182](https://doi.org/10.5281/zenodo.20419182)
 
-Snath Aviation is one of three domain instantiations proving the architecture's universality. The other two are Snath Locus (CRISPR drug screening) and Snath Basis (quantitative finance). All three implement identical V1–V6 routing invariants without domain-specific modification to the routing core.
+---
 
-ADS-B telemetry in `demo_real_world.py` and `d_hard_live.jsonl` is sourced from the [OpenSky Network](https://opensky-network.org) — a public receiver network aggregating aircraft transponder broadcasts freely available for research use.
+## Domain isomorphism
+
+Snath Aviation is one of three production instantiations proving that the V1–V6 routing contract is domain-agnostic. The other two:
+
+| Repo | Domain | Stream A | Stream B | Failure class |
+|---|---|---|---|---|
+| [Snath Locus](https://github.com/snath-ai/snath-locus) | CRISPR drug screening | DNA structure (DNABERT-2) | Patient RNA profile (GeneJEPA) | `pooled_screen` / `genomic_structure` |
+| [Snath Basis](https://github.com/snath-ai/snath-basis) | Quantitative finance | Fundamental analysis | Market signals | `market_regime` / `structural` |
+| **Snath Aviation** | Aviation sensor fusion | Radar | Pitot tube | `weather_induced` / `hardware_struct` |
+
+The temporal decay formula `W = exp(−λ · Δt)`, the identification/correction trust asymmetry, and the System 1/System 2 pipeline are **identical across all three domains**. The λ constants and failure-class labels are the only domain-specific parameters. This is the empirical claim of universal cognitive routing: the same mathematical spine governs CRISPR biology, financial markets, and aviation safety without modification.
+
+---
+
+*Apache 2.0 — Snath AI Open Source Research Initiative*

@@ -1,11 +1,17 @@
 import json
+import sys
+import os
+
+# Bootstrap Lár engine path before importing brain modules
+import _lar  # noqa: F401
+
 try:
     from brain.hippocampus import Hippocampus
 except ImportError:
-    import sys
-    sys.path.insert(0, "/Users/aadithya/Desktop/Lar_Main/DMN/lar/src")
-    sys.path.insert(0, "/Users/aadithya/Desktop/Lar_Main/DMN/lar")
-    from brain.hippocampus import Hippocampus
+    raise ImportError(
+        "brain.hippocampus not found. Ensure the Lár engine is installed and "
+        "SNATH_AVIATION_LARJEPA points to the lar_jepa directory."
+    )
 
 def check():
     try:
