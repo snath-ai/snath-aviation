@@ -176,7 +176,7 @@ def test_resolve_notes_stale_lora():
         z_p = np.array([0.0, 0.0, 0.0])
         dec, note = router.resolve(z_r, z_p, RouteDecision.TRIGGER_REPLAN, 0.9, 0.9)
 
-    assert "STALE" in note, f"Expected 'STALE' in note, got: {note}"
+    assert "System 1 only" in note, f"Expected 'System 1 only' in note, got: {note}"
     print(f"PASS  test_resolve_notes_stale_lora  note={note!r}")
 
 
