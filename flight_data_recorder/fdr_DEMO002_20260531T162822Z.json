@@ -1,10 +1,10 @@
 {
-  "signature": "fa2f71ddfc79273d0fb491f277f34810c10f89c3f6b3e58c95c372036200a9cf",
+  "signature": "59b698be83588be81e8b394da85e153b41687a165038f846cac0bc28bbfa249a",
   "meta": {
     "schema_version": "1.0",
     "fdr_compliant": true,
-    "recorded_at": "20260531T173414Z",
-    "flight_id": "TVF35DL",
+    "recorded_at": "20260531T162822Z",
+    "flight_id": "DEMO002",
     "state_keys": [
       "telemetry_radar",
       "telemetry_pitot",
@@ -17,14 +17,14 @@
   },
   "state": {
     "telemetry_radar": {
-      "velocity": 215.44,
-      "altitude": 10972.8,
-      "callsign": "TVF35DL"
+      "velocity": 221.06,
+      "altitude": 11582.4,
+      "callsign": "DEMO002"
     },
     "telemetry_pitot": {
-      "velocity": 215.44,
-      "altitude": 10972.8,
-      "callsign": "TVF35DL"
+      "velocity": 221.06,
+      "altitude": 11582.4,
+      "callsign": "DEMO002"
     },
     "z_radar": {
       "__tensor__": true,
@@ -33,9 +33,9 @@
       ],
       "dtype": "torch.float32",
       "data": [
-        0.7181333303451538,
+        0.7368666529655457,
         0.8999999761581421,
-        0.7315199971199036
+        0.772159993648529
       ]
     },
     "z_pitot": {
@@ -45,12 +45,12 @@
       ],
       "dtype": "torch.float32",
       "data": [
-        0.7181333303451538,
+        0.7368666529655457,
         0.8999999761581421,
-        0.7315199971199036
+        0.772159993648529
       ]
     },
-    "conf_radar": 0.7912006378173828,
-    "conf_pitot": 0.7912006378173828
+    "conf_radar": 0.8220192790031433,
+    "conf_pitot": 0.8220192790031433
   }
 }

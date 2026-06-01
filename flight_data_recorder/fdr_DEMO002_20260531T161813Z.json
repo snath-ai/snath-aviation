@@ -4,7 +4,7 @@
     "schema_version": "1.0",
     "fdr_compliant": true,
     "recorded_at": "20260531T161813Z",
-    "flight_id": "TVF38EU",
+    "flight_id": "DEMO002",
     "state_keys": [
       "telemetry_radar",
       "telemetry_pitot",
@@ -19,12 +19,12 @@
     "telemetry_radar": {
       "velocity": 227,
       "altitude": 11574.78,
-      "callsign": "TVF38EU"
+      "callsign": "DEMO002"
     },
     "telemetry_pitot": {
       "velocity": 227,
       "altitude": 11574.78,
-      "callsign": "TVF38EU"
+      "callsign": "DEMO002"
     },
     "z_radar": {
       "__tensor__": true,

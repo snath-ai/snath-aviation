@@ -95,3 +95,8 @@ The routing invariants, the Safety-Learning Equivalence theorem, and the proof o
 
 - Sajeev, A.V. (2026). *Divergence Is Not Noise: Multi-Stream Routing Without Modal Fusion and the Safety-Learning Equivalence.* [doi.org/10.5281/zenodo.20278781](https://doi.org/10.5281/zenodo.20278781)
 - Sajeev, A.V. (2026). *Universal Cognitive Routing: A Ten-Abstract-Base-Class Specification for Domain-Agnostic Agent Execution.* [doi.org/10.5281/zenodo.20278775](https://doi.org/10.5281/zenodo.20278775)
+- Sajeev, A.V. (2026). *Architecture Is All You Need: Pre-Registration and Protocol for Empirical Validation of the Lár Training Loop.* [doi.org/10.5281/zenodo.20419182](https://doi.org/10.5281/zenodo.20419182)
+
+Snath Aviation is one of three domain instantiations proving the architecture's universality. The other two are Snath Locus (CRISPR drug screening) and Snath Basis (quantitative finance). All three implement identical V1–V6 routing invariants without domain-specific modification to the routing core.
+
+ADS-B telemetry in `demo_real_world.py` and `d_hard_live.jsonl` is sourced from the [OpenSky Network](https://opensky-network.org) — a public receiver network aggregating aircraft transponder broadcasts freely available for research use.

@@ -216,12 +216,18 @@ If the `AviationRoutingKernel` proposes a counterfactual trajectory but is not e
 
 ## Part VI: Live Empirical Results
 
-### Single Flight (Live OpenSky Telemetry — UAL2298)
+### Single Flight (OpenSky ADS-B Demo — UAL2298)
 
-The system was tested on live, real-world telemetry from United Airlines Flight 2298, intercepted from the OpenSky Network API.
+The system was tested on publicly available ADS-B telemetry from the OpenSky Network
+(opensky-network.org), a public receiver network that aggregates aircraft transponder
+broadcasts — the same signals used by air traffic control. ADS-B data is publicly
+broadcast by all commercial aircraft and freely available for research use.
+The scenario uses velocity and altitude readings from a United Airlines flight as
+realistic input to the research system; all latent vectors, routing decisions, and
+adapter outputs shown below are generated entirely by the Snath Aviation pipeline.
 
 ```
-✈️  Intercepted Live Flight: UAL2298 (United States)
+✈️  ADS-B Demo Flight: UAL2298 (United States)
    Velocity: 223.03 m/s | Altitude: 10363.2 m
 
 [1] Perceiving Environment
