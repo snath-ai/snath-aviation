@@ -63,8 +63,10 @@ def main():
                 z_r = radar.encode(radar_t); z_p = pitot.encode(pitot_t)
                 div = router.divergence(z_r, z_p)
                 dec = router.route(radar.get_confidence(z_r), pitot.get_confidence(z_p), div)
-                arouter.resolve(z_r, z_p, dec, radar.get_confidence(z_r), pitot.get_confidence(z_p))
-                pitot.load_lora("models/adapters_live/adapter_pitot_freeze.pt")
+                # Pass enc_pitot so resolve() injects LoRA internally if W >= min_trust.
+                # Manual load_lora() removed — trust gate now enforced inside resolve().
+                arouter.resolve(z_r, z_p, dec, radar.get_confidence(z_r), pitot.get_confidence(z_p),
+                                enc_pitot=pitot)
                 monitor.notify_lora_loaded(pitot, adapter_type="pitot_freeze")
                 print(f"\n  ⚡ [Tick {tick}] Pitot freeze. System 1 hit. LoRA loaded.\n")
 

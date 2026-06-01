@@ -181,6 +181,40 @@ def test_resolve_notes_stale_lora():
 
 
 # ---------------------------------------------------------------------------
+# 7. resolve() actually injects LoRA when fresh + encoder passed
+# ---------------------------------------------------------------------------
+
+def test_resolve_injects_when_fresh():
+    """When JSON hit + fresh .pt + enc_pitot passed, resolve() calls load_lora()."""
+    try:
+        from core.types import RouteDecision
+    except ImportError:
+        print("SKIP  test_resolve_injects_when_fresh  (core.types not on path)")
+        return
+
+    import numpy as np
+    with tempfile.TemporaryDirectory() as td:
+        _write_json(os.path.join(td, "adapter_pitot_freeze.json"), _iso_years_ago(0.01))
+        _write_pt(os.path.join(td, "adapter_pitot_freeze.pt"), _iso_years_ago(0.01))
+
+        class _FakePitotEncoder:
+            loaded_path = None
+            def load_lora(self, path):
+                _FakePitotEncoder.loaded_path = path
+
+        router = AviationAdapterRouter(adapter_dir=td, min_trust=0.40)
+        enc = _FakePitotEncoder()
+        z_r = np.array([0.0, 0.0, 0.0])
+        z_p = np.array([0.0, 0.0, 0.0])
+        dec, note = router.resolve(z_r, z_p, RouteDecision.TRIGGER_REPLAN, 0.9, 0.9,
+                                   enc_pitot=enc)
+
+    assert "(injected)" in note, f"Expected '(injected)' in note, got: {note}"
+    assert _FakePitotEncoder.loaded_path is not None, "load_lora() should have been called"
+    print(f"PASS  test_resolve_injects_when_fresh  note={note!r}")
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 
@@ -191,4 +225,5 @@ if __name__ == "__main__":
     test_check_lora_trust_stale()
     test_cusp_stale()
     test_resolve_notes_stale_lora()
-    print("\nAll 6 Snath Aviation temporal decay regression tests passed.")
+    test_resolve_injects_when_fresh()
+    print("\nAll 7 Snath Aviation temporal decay regression tests passed.")

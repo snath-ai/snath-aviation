@@ -421,14 +421,18 @@ def run_autonomous_resolution():
             
             from dmn.adapter_router import AviationAdapterRouter
             arouter = AviationAdapterRouter(adapter_dir="models/adapters_live")
-            sys1_dec, sys1_note = arouter.resolve(z_radar_raw, z_pitot_raw, base_dec_raw, c_radar_raw, c_pitot_raw)
+            # Pass enc_pitot so resolve() injects LoRA internally if W >= min_trust.
+            sys1_dec, sys1_note = arouter.resolve(
+                z_radar_raw, z_pitot_raw, base_dec_raw, c_radar_raw, c_pitot_raw,
+                enc_pitot=pitot,
+            )
             print(f"    System 1 Decision: {sys1_dec.name}")
             print(f"    System 1 Note: {sys1_note}")
-            
+
             # --- TIER 2: SYSTEM 2 (Deep PyTorch Restructuring) ---
             print("\n    [Tier 2] System 2: Deep PyTorch Cortical Restructuring")
-            # Load the PyTorch LoRA adapter into the Neural Network
-            pitot.load_lora("models/adapters_live/adapter_pitot_freeze.pt")
+            # LoRA injection now handled inside resolve() with trust gate —
+            # manual load_lora() removed.
             
             # Re-encode the telemetry using the LoRA-updated Pitot Encoder
             z_radar_sys2 = radar.encode(flight_data)

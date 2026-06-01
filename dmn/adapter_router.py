@@ -97,7 +97,19 @@ class AviationAdapterRouter:
         except Exception:
             return 1.0
 
-    def resolve(self, z_radar: np.ndarray, z_pitot: np.ndarray, base_decision: RouteDecision, c_radar: float, c_pitot: float) -> tuple[RouteDecision, str]:
+    def resolve(self, z_radar: np.ndarray, z_pitot: np.ndarray,
+                base_decision: RouteDecision, c_radar: float, c_pitot: float,
+                enc_radar=None, enc_pitot=None) -> tuple[RouteDecision, str]:
+        """
+        System 1 + System 2 combined inference.
+
+        enc_radar / enc_pitot (optional, matching Basis pattern):
+          Pass the live encoder objects to enable System 2 injection inside
+          resolve().  When provided and W >= min_trust, resolve() calls
+          enc.load_lora(pt_path) internally — callers do not need to call
+          load_lora() manually.  When omitted, resolve() identifies the fault
+          (System 1) and reports trust in the note but does not inject.
+        """
         if base_decision != RouteDecision.TRIGGER_REPLAN:
             return base_decision, "Base decision was safe."
 
@@ -111,28 +123,35 @@ class AviationAdapterRouter:
                 dist = np.sum(np.abs(z_radar - np.array(adapter["centroid_v_a"])))
                 if dist < 0.2:
                     # System 2 — Correction (perishable).
-                    # Check the .pt temporal trust independently of the centroid
-                    # match.  A stale adapter (W < min_trust) is refused; routing
-                    # proceeds on System 1 logic alone.  The route decision
-                    # (COMMIT_TRAJECTORY) is determined by System 1 either way —
-                    # System 2 only sharpens the correction, it does not change
-                    # the identification.
+                    # Trust gate applied here only, not at the centroid step.
                     W = self.check_lora_trust("pitot_freeze")
-                    lora_note = (f"LoRA W={W:.2f} — System 2 ready" if W >= self.min_trust
-                                 else f"STALE LoRA W={W:.2f} < {self.min_trust} — System 1 only")
+                    pt_path = os.path.join(self.adapter_dir, "adapter_pitot_freeze.pt")
+                    if W >= self.min_trust:
+                        lora_note = f"LoRA W={W:.2f} — System 2 ready"
+                        if enc_pitot is not None and hasattr(enc_pitot, "load_lora"):
+                            enc_pitot.load_lora(pt_path)
+                            lora_note += " (injected)"
+                    else:
+                        lora_note = f"STALE LoRA W={W:.2f} < {self.min_trust} — System 1 only"
                     return RouteDecision.COMMIT_TRAJECTORY, (
                         f"System 1 Cache Hit (Pitot Freeze detected). "
                         f"Overriding base decision. | [System 2] {lora_note}"
                     )
             elif adapter["type"] == "gps_spoof":
                 # System 1 — Identification (trust-invariant).
-                # Same asymmetry applies: centroid match on z_pitot fires
-                # regardless of .pt age; trust gate is applied to System 2 only.
+                # Same asymmetry: centroid match on z_pitot is trust-invariant;
+                # trust gate applied to System 2 only.
                 dist = np.sum(np.abs(z_pitot - np.array(adapter["centroid_v_b"])))
                 if dist < 0.2:
                     W = self.check_lora_trust("gps_spoof")
-                    lora_note = (f"LoRA W={W:.2f} — System 2 ready" if W >= self.min_trust
-                                 else f"STALE LoRA W={W:.2f} < {self.min_trust} — System 1 only")
+                    pt_path = os.path.join(self.adapter_dir, "adapter_gps_spoof.pt")
+                    if W >= self.min_trust:
+                        lora_note = f"LoRA W={W:.2f} — System 2 ready"
+                        if enc_radar is not None and hasattr(enc_radar, "load_lora"):
+                            enc_radar.load_lora(pt_path)
+                            lora_note += " (injected)"
+                    else:
+                        lora_note = f"STALE LoRA W={W:.2f} < {self.min_trust} — System 1 only"
                     return RouteDecision.COMMIT_TRAJECTORY, (
                         f"System 1 Cache Hit (GPS Spoof detected). "
                         f"Overriding base decision. | [System 2] {lora_note}"

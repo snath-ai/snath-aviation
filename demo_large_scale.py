@@ -115,18 +115,16 @@ def main():
             metrics["anomalies_evaluated"] += 1
             metrics["base_div_sum"] += div_raw
             
-            # System 1 Check
-            sys1_dec, sys1_note = sys1_router.resolve(z_r_raw, z_p_raw, dec_raw, 0.98, 0.90)
+            # System 1 + 2: resolve() handles identification and, when encoders
+            # are passed, injects the LoRA correction internally gated by the
+            # temporal trust check W = exp(-λ·Δt).  Callers no longer call
+            # load_lora() manually — the trust gate is now enforced here.
+            sys1_dec, sys1_note = sys1_router.resolve(
+                z_r_raw, z_p_raw, dec_raw, 0.98, 0.90,
+                enc_radar=radar, enc_pitot=pitot,
+            )
             if sys1_dec == RouteDecision.COMMIT_TRAJECTORY:
                 metrics["sys1_hits"] += 1
-                
-            # System 2 Execution (Dynamic Loading)
-            if "Pitot Freeze" in sys1_note:
-                radar.lora_A = None
-                pitot.load_lora("models/adapters_large/adapter_pitot_freeze.pt")
-            elif "GPS Spoof" in sys1_note:
-                pitot.lora_A = None
-                radar.load_lora("models/adapters_large/adapter_gps_spoof.pt")
                 
             z_r_sys2 = radar.encode(radar_tele)
             z_p_sys2 = pitot.encode(pitot_tele)
