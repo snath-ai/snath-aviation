@@ -229,15 +229,14 @@ The routing invariants, the Safety-Learning Equivalence theorem, and the empiric
 
 ## Domain isomorphism
 
-Snath Aviation is one of three production instantiations proving that the V1–V6 routing contract is domain-agnostic. The other two:
+Snath Aviation is one of several production instantiations proving that the V1–V6 routing contract is domain-agnostic:
 
 | Repo | Domain | Stream A | Stream B | Failure class |
 |---|---|---|---|---|
-| [Snath Locus](https://github.com/snath-ai/snath-locus) | CRISPR drug screening | DNA structure (DNABERT-2) | Patient RNA profile (GeneJEPA) | `pooled_screen` / `genomic_structure` |
 | [Snath Basis](https://github.com/snath-ai/snath-basis) | Quantitative finance | Fundamental analysis | Market signals | `market_regime` / `structural` |
 | **Snath Aviation** | Aviation sensor fusion | Radar | Pitot tube | `weather_induced` / `hardware_struct` |
 
-The temporal decay formula `W = exp(−λ · Δt)`, the identification/correction trust asymmetry, and the System 1/System 2 pipeline are **identical across all three domains**. The λ constants and failure-class labels are the only domain-specific parameters. This is the empirical claim of universal cognitive routing: the same mathematical spine governs CRISPR biology, financial markets, and aviation safety without modification.
+The temporal decay formula `W = exp(−λ · Δt)`, the identification/correction trust asymmetry, and the System 1/System 2 pipeline are **identical across all instantiations**. The λ constants and failure-class labels are the only domain-specific parameters. This is the empirical claim of universal cognitive routing: the same mathematical spine governs financial markets and aviation safety without modification.
 
 ---
 
