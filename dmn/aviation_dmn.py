@@ -76,10 +76,12 @@ class AviationDMN:
             signature = hmac.new(_ADAPTER_HMAC_KEY, payload_str.encode(), hashlib.sha256).hexdigest()
             
             torch.save({
-                "A": A.detach(), 
-                "B": B.detach(), 
+                "A": A.detach(),
+                "B": B.detach(),
                 "target_encoder": "pitot",
-                "hmac_hex": signature
+                "hmac_hex":       signature,
+                "created_at":     datetime.datetime.utcnow().isoformat() + "Z",
+                "failure_class":  "weather_induced",   # temporal decay λ=0.50
             }, pt_path)
             print(f"    [SYSTEM 2] Trained PyTorch LoRA (Loss: {loss.item():.4f}) at {pt_path}")
             
@@ -124,9 +126,11 @@ class AviationDMN:
             signature = hmac.new(_ADAPTER_HMAC_KEY, payload_str.encode(), hashlib.sha256).hexdigest()
             
             torch.save({
-                "A": A.detach(), 
-                "B": B.detach(), 
+                "A": A.detach(),
+                "B": B.detach(),
                 "target_encoder": "radar",
-                "hmac_hex": signature
+                "hmac_hex":       signature,
+                "created_at":     datetime.datetime.utcnow().isoformat() + "Z",
+                "failure_class":  "weather_induced",   # temporal decay λ=0.50
             }, pt_path)
             print(f"    [SYSTEM 2] Trained PyTorch LoRA (Loss: {loss.item():.4f}) at {pt_path}")
