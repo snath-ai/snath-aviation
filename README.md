@@ -234,7 +234,7 @@ Snath Aviation is one of several production instantiations proving that the V1�
 | Repo | Domain | Stream A | Stream B | Failure class |
 |---|---|---|---|---|
 | [Snath Basis](https://github.com/snath-ai/snath-basis) | Quantitative finance | Fundamental analysis | Market signals | `market_regime` / `structural` |
-| **Snath Aviation** | Aviation sensor fusion | Radar | Pitot tube | `weather_induced` / `hardware_struct` |
+| **Snath Aviation** | Aviation sensor routing | Radar | Pitot tube | `weather_induced` / `hardware_struct` |
 
 The temporal decay formula `W = exp(−λ · Δt)`, the identification/correction trust asymmetry, and the System 1/System 2 pipeline are **identical across all instantiations**. The λ constants and failure-class labels are the only domain-specific parameters. This is the empirical claim of universal cognitive routing: the same mathematical spine governs financial markets and aviation safety without modification.
 
