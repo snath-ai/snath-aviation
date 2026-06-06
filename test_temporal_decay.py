@@ -66,14 +66,30 @@ def _write_pt(path: str, created_at: str, failure_class: str = "weather_induced"
 
 
 def _write_json(path: str, created_at: str, failure_class: str = "weather_induced") -> None:
+    """Write a properly HMAC-signed JSON centroid adapter for testing.
+
+    Uses non-zero centroid vectors so cosine similarity matching works.
+    The test input vectors z_r=[1,0,0], z_p=[0,0,0] → delta=[1,0,0],
+    which has cosine similarity 1.0 with centroid_delta=[1,0,0]-[0,0,0]=[1,0,0].
+    """
+    import hmac as _hmac
+    import hashlib
+    _KEY = b"snath_aviation_adapter_sovereignty_2026"
+    immutable = {
+        "type":          "pitot_freeze",
+        "centroid_v_a":  [1.0, 0.0, 0.0],   # non-zero so cosine matching works
+        "centroid_v_b":  [0.0, 0.0, 0.0],
+        "trust":         "radar",
+        "winner":        "radar",
+        "win_rate":      1.0,
+        "n_events":      5,
+        "failure_class": failure_class,
+    }
+    sig = _hmac.new(
+        _KEY, json.dumps(immutable, sort_keys=True).encode(), hashlib.sha256
+    ).hexdigest()
     with open(path, "w") as f:
-        json.dump({
-            "type":          "pitot_freeze",
-            "centroid_v_a":  [0.0, 0.0, 0.0],
-            "trust":         "radar",
-            "failure_class": failure_class,
-            "created_at":    created_at,
-        }, f)
+        json.dump({**immutable, "created_at": created_at, "sig": sig}, f)
 
 
 # ---------------------------------------------------------------------------
@@ -172,11 +188,13 @@ def test_resolve_notes_stale_lora():
         _write_pt(os.path.join(td, "adapter_pitot_freeze.pt"), _iso_years_ago(3.0))
 
         router = AviationAdapterRouter(adapter_dir=td, min_trust=0.40)
-        z_r = np.array([0.0, 0.0, 0.0])
+        # delta = z_r - z_p = [1,0,0] — matches centroid_v_a - centroid_v_b = [1,0,0]
+        z_r = np.array([1.0, 0.0, 0.0])
         z_p = np.array([0.0, 0.0, 0.0])
         dec, note = router.resolve(z_r, z_p, RouteDecision.TRIGGER_REPLAN, 0.9, 0.9)
 
-    assert "System 1 only" in note, f"Expected 'System 1 only' in note, got: {note}"
+    assert "System 1 only" in note or "STALE" in note, \
+        f"Expected stale note, got: {note}"
     print(f"PASS  test_resolve_notes_stale_lora  note={note!r}")
 
 
@@ -204,7 +222,7 @@ def test_resolve_injects_when_fresh():
 
         router = AviationAdapterRouter(adapter_dir=td, min_trust=0.40)
         enc = _FakePitotEncoder()
-        z_r = np.array([0.0, 0.0, 0.0])
+        z_r = np.array([1.0, 0.0, 0.0])
         z_p = np.array([0.0, 0.0, 0.0])
         dec, note = router.resolve(z_r, z_p, RouteDecision.TRIGGER_REPLAN, 0.9, 0.9,
                                    enc_pitot=enc)

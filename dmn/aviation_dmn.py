@@ -35,20 +35,33 @@ class AviationDMN:
         
         if len(radar_wins) > 0:
             print(f"🧠 DMN Sleep Cycle: Processing {len(radar_wins)} 'Pitot Freeze' anomalies...")
-            
+
             # ---------------------------------------------------------
-            # 1. SYSTEM 1: Fast JSON Centroid Generation
+            # 1. SYSTEM 1: Fast JSON Centroid Generation (HMAC-signed)
+            # Both centroids stored so adapter_router can use cosine
+            # similarity on the delta vector (matching Basis/Robotics).
             # ---------------------------------------------------------
             avg_v_a = np.mean([e.v_a for e in radar_wins], axis=0).tolist()
+            avg_v_b = np.mean([e.v_b for e in radar_wins], axis=0).tolist()
+            created_at = datetime.datetime.utcnow().isoformat() + "Z"
+            json_immutable = {
+                "type": "pitot_freeze",
+                "centroid_v_a": avg_v_a,
+                "centroid_v_b": avg_v_b,
+                "trust": "radar",
+                "winner": "radar",
+                "win_rate": round(len(radar_wins) / max(len(events), 1), 3),
+                "n_events": len(radar_wins),
+                "failure_class": "weather_induced",
+            }
+            json_sig = hmac.new(
+                _ADAPTER_HMAC_KEY,
+                json.dumps(json_immutable, sort_keys=True).encode(),
+                hashlib.sha256,
+            ).hexdigest()
             json_path = os.path.join(self.adapter_dir, "adapter_pitot_freeze.json")
             with open(json_path, "w") as f:
-                json.dump({
-                    "type": "pitot_freeze",
-                    "centroid_v_a": avg_v_a,
-                    "trust": "radar",
-                    "failure_class": "weather_induced",
-                    "created_at": datetime.datetime.utcnow().isoformat() + "Z",
-                }, f)
+                json.dump({**json_immutable, "created_at": created_at, "sig": json_sig}, f, indent=2)
             print(f"    [SYSTEM 1] Generated Fast JSON Centroid Cache at {json_path}")
             
             # ---------------------------------------------------------
@@ -96,16 +109,27 @@ class AviationDMN:
         if len(pitot_wins) > 0:
             print(f"🧠 DMN Sleep Cycle: Processing {len(pitot_wins)} 'GPS Spoof' anomalies...")
             
+            avg_v_a_spoof = np.mean([e.v_a for e in pitot_wins], axis=0).tolist()
             avg_v_b = np.mean([e.v_b for e in pitot_wins], axis=0).tolist()
+            created_at_spoof = datetime.datetime.utcnow().isoformat() + "Z"
+            json_immutable_spoof = {
+                "type": "gps_spoof",
+                "centroid_v_a": avg_v_a_spoof,
+                "centroid_v_b": avg_v_b,
+                "trust": "pitot",
+                "winner": "pitot",
+                "win_rate": round(len(pitot_wins) / max(len(events), 1), 3),
+                "n_events": len(pitot_wins),
+                "failure_class": "weather_induced",
+            }
+            json_sig_spoof = hmac.new(
+                _ADAPTER_HMAC_KEY,
+                json.dumps(json_immutable_spoof, sort_keys=True).encode(),
+                hashlib.sha256,
+            ).hexdigest()
             json_path = os.path.join(self.adapter_dir, "adapter_gps_spoof.json")
             with open(json_path, "w") as f:
-                json.dump({
-                    "type": "gps_spoof",
-                    "centroid_v_b": avg_v_b,
-                    "trust": "pitot",
-                    "failure_class": "weather_induced",
-                    "created_at": datetime.datetime.utcnow().isoformat() + "Z",
-                }, f)
+                json.dump({**json_immutable_spoof, "created_at": created_at_spoof, "sig": json_sig_spoof}, f, indent=2)
             print(f"    [SYSTEM 1] Generated Fast JSON Centroid Cache at {json_path}")
             
             # Train LoRA for Radar Encoder
