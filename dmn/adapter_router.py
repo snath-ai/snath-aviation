@@ -45,6 +45,11 @@ from typing import Optional
 
 from core.types import RouteDecision
 
+try:
+    from brain.abstract_adapter_router import AbstractAdapterRouter
+except ImportError:
+    from abc import ABC as AbstractAdapterRouter
+
 _ADAPTER_HMAC_KEY = b"snath_aviation_adapter_sovereignty_2026"
 
 # ── Temporal decay ────────────────────────────────────────────────────────────
@@ -112,7 +117,7 @@ def _verify_pt(meta: dict) -> bool:
         return False
 
 
-class AviationAdapterRouter:
+class AviationAdapterRouter(AbstractAdapterRouter):
     """
     Two-pass adapter router for Snath Aviation.
 
