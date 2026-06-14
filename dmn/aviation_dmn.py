@@ -16,9 +16,14 @@ import hashlib
 from dhard import DHardQueue
 from .sigreg import SIGRegLoss
 
+try:
+    from brain.abstract_dmn import AbstractDMN
+except ImportError:
+    from abc import ABC as AbstractDMN
+
 _ADAPTER_HMAC_KEY = b"snath_aviation_adapter_sovereignty_2026"
 
-class AviationDMN:
+class AviationDMN(AbstractDMN):
     def __init__(self, queue_path: str = "d_hard.jsonl", adapter_dir: str = "models/adapters"):
         self.q = DHardQueue(queue_path)
         self.adapter_dir = adapter_dir
@@ -28,7 +33,7 @@ class AviationDMN:
         events = [e for e in self.q.all() if e.winner is not None]
         if not events:
             print("No resolved anomalies to consolidate.")
-            return
+            return []
             
         # Cluster 1: Radar won, meaning Pitot tube failed.
         radar_wins = [e for e in events if e.winner == "radar"]
@@ -168,3 +173,27 @@ class AviationDMN:
                 "failure_class":  "weather_induced",   # temporal decay λ=0.50
             }, pt_path)
             print(f"    [SYSTEM 2] Trained PyTorch LoRA (Loss: {loss.item():.4f}) at {pt_path}")
+
+        return [
+            {"path": os.path.join(self.adapter_dir, f)}
+            for f in os.listdir(self.adapter_dir)
+            if f.endswith(".json")
+        ]
+
+    def ingest(self, event) -> None:
+        self.q.push(event)
+
+    def recall(self, query, **kwargs) -> dict:
+        for fname in os.listdir(self.adapter_dir):
+            if fname.endswith(".json"):
+                path = os.path.join(self.adapter_dir, fname)
+                try:
+                    data = json.load(open(path))
+                    if data.get("type") == query or data.get("failure_class") == query:
+                        return data
+                except Exception:
+                    pass
+        return {}
+
+    def stats(self) -> dict:
+        return self.q.stats()
