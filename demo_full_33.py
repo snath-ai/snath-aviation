@@ -157,7 +157,7 @@ def run_autonomous_resolution():
         print(f"    Trajectory Safety Score: {score:.2f}")
         print(f"    Final Maneuver: {final_route}")
         
-        print("\n[6] DMN Memory Consolidation (Hippocampus)...")
+        print("\n[6] DMN Memory Consolidation (Tier 1 ingest)...")
         from dmn_integration.consolidation_node import JEPA_DMN_Consolidation_Node
         dmn_node = JEPA_DMN_Consolidation_Node()
         trajectory_log = {

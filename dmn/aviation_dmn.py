@@ -181,18 +181,26 @@ class AviationDMN(AbstractDMN):
         ]
 
     def ingest(self, event) -> None:
-        self.q.push(event)
+        try:
+            self.q.push(event)
+        except Exception as e:
+            print(f"[AviationDMN] ingest failed (non-blocking): {e}")
 
     def recall(self, query, **kwargs) -> dict:
-        for fname in os.listdir(self.adapter_dir):
-            if fname.endswith(".json"):
-                path = os.path.join(self.adapter_dir, fname)
-                try:
-                    data = json.load(open(path))
-                    if data.get("type") == query or data.get("failure_class") == query:
-                        return data
-                except Exception:
-                    pass
+        if not os.path.isdir(self.adapter_dir):
+            return {}
+        try:
+            for fname in os.listdir(self.adapter_dir):
+                if fname.endswith(".json"):
+                    path = os.path.join(self.adapter_dir, fname)
+                    try:
+                        data = json.load(open(path))
+                        if data.get("type") == query or data.get("failure_class") == query:
+                            return data
+                    except Exception:
+                        pass
+        except Exception:
+            pass
         return {}
 
     def stats(self) -> dict:

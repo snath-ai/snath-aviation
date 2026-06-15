@@ -100,7 +100,7 @@ The last invariant, **R4 (Trajectory Safety Score)**, is the final un-bypassable
 
 ### What Happens After a Failure
 
-When the `AviationDivergenceRouter` detects a confident disagreement, it does not panic. It does not disconnect. It routes the event to the **$\mathcal{D}_{hard}$ curriculum** — a tamper-evident, HMAC-signed episodic memory queue stored in ChromaDB.
+When the `AviationDivergenceRouter` detects a confident disagreement, it does not panic. It does not disconnect. It routes the event to the **$\mathcal{D}_{hard}$ curriculum** — a tamper-evident, HMAC-signed episodic memory queue written to `d_hard_live.jsonl` (flat-file, auditable).
 
 Every sensor failure, every geometric divergence event, every case where the system had to reconstruct a safe trajectory from conflicting inputs is logged with full provenance: the raw latent vectors, the confidence scalars, the divergence measurement, and the realised outcome.
 

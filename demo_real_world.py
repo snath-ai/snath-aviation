@@ -370,7 +370,7 @@ def run_autonomous_resolution():
             reporter.execute(incident_state)
             sys.exit(1) # Unrecoverable crash / disconnect
         
-        print("\n[6] DMN Memory Consolidation (Hippocampus)...")
+        print("\n[6] DMN Memory Consolidation (Tier 1 ingest)...")
         try:
             from dmn_integration.consolidation_node import JEPA_DMN_Consolidation_Node
             dmn_node = JEPA_DMN_Consolidation_Node()

@@ -223,9 +223,7 @@ AviationDivergenceRouter → TRIGGER_REPLAN
       ▼
 DHardEvent (HMAC-signed)
       │
-      ├──► ChromaDB (episodic memory, live)
-      │
-      └──► d_hard_live.jsonl (local queue)
+      └──► d_hard_live.jsonl (Tier 1 episodic queue, flat-file)
                 │
            [Sleep Cycle]
                 │
